@@ -1,6 +1,5 @@
 package com.example.health_connect_test
 
-import android.content.Context
 import android.content.DialogInterface
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -13,15 +12,15 @@ import androidx.health.connect.client.HealthConnectClient.Companion.SDK_UNAVAILA
 import androidx.health.connect.client.HealthConnectClient.Companion.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
-import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.metadata.DataOrigin
+import androidx.health.connect.client.request.AggregateGroupByDurationRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import java.time.Instant
+import java.time.Duration
+import java.time.LocalDateTime
 
 class MainActivity : AppCompatActivity() {
 
@@ -97,6 +96,7 @@ class MainActivity : AppCompatActivity() {
     private val requestPermissions = registerForActivityResult(requestPermissionActivityContract) {granted ->
         if(granted.containsAll(HEALTH_CONNECT_PERMISSIONS)){
             Toast.makeText(this,  "全ての権限があります", Toast.LENGTH_LONG).show()
+            onPermissionAcceptedAction()
         }else{
             Toast.makeText(this,  "権限が許可されませんでした", Toast.LENGTH_LONG).show()
         }
@@ -111,16 +111,17 @@ class MainActivity : AppCompatActivity() {
         }else{
             Log.d("MyLog", "権限はありません")
             requestPermissions.launch(HEALTH_CONNECT_PERMISSIONS)
-
         }
     }
 
-    private suspend fun readStepRecord(client: HealthConnectClient): Long{
-        var step: Long = 0;
+
+    private suspend fun readStep(client: HealthConnectClient, startTime: LocalDateTime, endTime: LocalDateTime): Long{
+        var step = 0L;
         try {
-            val startTime = Instant.ofEpochSecond(1704034800)
-            val endTime  = Instant.ofEpochSecond(1704294000)
-            val response  = client.readRecords(ReadRecordsRequest(StepsRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime)))
+            val response  = client.readRecords(
+                ReadRecordsRequest(StepsRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime),
+                    dataOriginFilter = emptySet()))
             for (data in response.records){
                 step += data.count
             }
@@ -128,5 +129,36 @@ class MainActivity : AppCompatActivity() {
             Log.d("MyLog", "歩数取得に失敗")
         }
         return step
+    }
+
+    // NOTE:  https://developer.android.com/guide/health-and-fitness/health-connect/common-workflows/aggregate-data?hl=ja
+    private suspend  fun readDurationStep(client: HealthConnectClient, startTime: LocalDateTime, endTime: LocalDateTime): Long{
+        var step = 0L;
+        try {
+            val response  = client.aggregateGroupByDuration(
+                AggregateGroupByDurationRequest(
+                    metrics = setOf(StepsRecord.COUNT_TOTAL),
+                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime),
+                    timeRangeSlicer = Duration.ofDays(1),
+                    // Note: Google Fitで取得したデータだけとるようにする
+                    dataOriginFilter = setOf(DataOrigin("com.google.android.apps.fitness"))
+                )
+            )
+            for (data in response){
+                step += data.result[StepsRecord.COUNT_TOTAL] ?: 0L
+            }
+
+        }catch (e: Exception){
+            Log.d("MyLog", "歩数取得に失敗")
+        }
+        return step
+    }
+
+    private suspend fun readStepRecord(client: HealthConnectClient): Long{
+        val startTime = LocalDateTime.of(2024, 1, 1, 0, 0, 0)
+        val endTime  = LocalDateTime.of(2024, 1, 6, 0, 0, 0)
+
+        // return readStep(client, startTime, endTime)
+        return readDurationStep(client, startTime, endTime)
     }
 }
