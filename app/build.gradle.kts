@@ -42,7 +42,7 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     // Use to implement health connects
-    implementation("androidx.health.connect:connect-client:1.0.0-alpha11")
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha02")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
